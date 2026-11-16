@@ -1,0 +1,12 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Bracket room</title><link rel="stylesheet" href="/style.css"><script src="/app.js" defer></script></head>
+<body><main><h1>Bracket room</h1><p>Seed a tournament, report scores, follow the next round.</p>
+<section><label>Organizer API token <input id="token" type="password" autocomplete="off"></label><button id="connect">Connect / refresh</button><small>Token stays in page memory.</small></section>
+<p id="status" role="status"></p>
+<section><h2>Tournaments</h2><form id="create"><label>Name <input name="name" maxlength="64" required></label><label>Capacity <input name="capacity" type="number" min="2" max="128" value="32" required></label><button>Create</button></form><ul id="tournaments"></ul></section>
+<section><h2 id="selected">Select a tournament</h2><form id="register"><label>Entrant name <input name="name" maxlength="40" required></label><label>Seed (optional) <input name="seed" type="number" min="1" max="128"></label><button>Register</button></form>
+<ol id="entrants"></ol><form id="manage"><label>Entrant ID <input name="entrantId" type="number" min="1" required></label><label>New seed <input name="seed" type="number" min="1" max="128"></label><button name="action" value="seed">Change seed</button><button name="action" value="withdraw">Withdraw</button></form>
+<p class="controls"><button id="start">Start tournament</button><button id="cancel">Cancel tournament</button></p><small>Registration and seeds lock when the tournament starts. Results are final.</small></section>
+<section><h2>Bracket</h2><div id="bracket"></div></section>
+<section><h2>Report result</h2><form id="result"><label>Match ID <input name="matchId" type="number" min="1" required></label><label>Side A score <input name="scoreA" type="number" min="0" max="100000" value="0" required></label><label>Side B score <input name="scoreB" type="number" min="0" max="100000" value="0" required></label><button>Save result</button></form></section>
+</main></body></html>

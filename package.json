@@ -1,0 +1,17 @@
+{
+  "name": "brackets",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Single-elimination tournament management",
+  "type": "module",
+  "engines": {
+    "node": ">=22.13.0"
+  },
+  "scripts": {
+    "start": "node src/index.js",
+    "test": "node --test",
+    "check": "node --check src/index.js"
+  },
+  "license": "MIT",
+  "dependencies": {}
+}
