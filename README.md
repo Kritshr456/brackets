@@ -45,7 +45,7 @@ public spectator links and result disputes are not included.
 ## JSON API
 
 All `/api` calls need `Authorization: Bearer <API_TOKEN>`. POST bodies must use
-`Content-Type: application/json`. All IDs are positive integers.
+`Content-Type: application/json`. IDs must be positive safe integers or canonical decimal strings (for example `1` or `"1"`). Booleans, arrays, whitespace and exponent-form strings are rejected.
 
 | Method | Path | Body / response |
 | --- | --- | --- |
@@ -83,3 +83,9 @@ restart persistence and the HTTP create-to-champion flow.
 
 HTTP security tests also exercise bearer authentication, JSON and content-type
 validation, oversized request rejection, security headers and rate limits.
+
+## Updating
+
+Run `git pull --ff-only` and `npm ci`, then restart the service.
+See [CHANGELOG.md](CHANGELOG.md) for the latest behavior changes. This update
+does not require a database migration.
