@@ -1,12 +1,56 @@
 <!doctype html>
-<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Bracket room</title><link rel="stylesheet" href="/style.css"><script src="/app.js" defer></script></head>
-<body><main><h1>Bracket room</h1><p>Seed a tournament, report scores, follow the next round.</p>
-<section><label>Organizer API token <input id="token" type="password" autocomplete="off"></label><button id="connect">Connect / refresh</button><small>Token stays in page memory.</small></section>
-<p id="status" role="status"></p>
-<section><h2>Tournaments</h2><form id="create"><label>Name <input name="name" maxlength="64" required></label><label>Capacity <input name="capacity" type="number" min="2" max="128" value="32" required></label><button>Create</button></form><ul id="tournaments"></ul></section>
-<section><h2 id="selected">Select a tournament</h2><form id="register"><label>Entrant name <input name="name" maxlength="40" required></label><label>Seed (optional) <input name="seed" type="number" min="1" max="128"></label><button>Register</button></form>
-<ol id="entrants"></ol><form id="manage"><label>Entrant ID <input name="entrantId" type="number" min="1" required></label><label>New seed <input name="seed" type="number" min="1" max="128"></label><button name="action" value="seed">Change seed</button><button name="action" value="withdraw">Withdraw</button></form>
-<p class="controls"><button id="start">Start tournament</button><button id="cancel">Cancel tournament</button></p><small>Registration and seeds lock when the tournament starts. Results are final.</small></section>
-<section><h2>Bracket</h2><div id="bracket"></div></section>
-<section><h2>Report result</h2><form id="result"><label>Match ID <input name="matchId" type="number" min="1" required></label><label>Side A score <input name="scoreA" type="number" min="0" max="100000" value="0" required></label><label>Side B score <input name="scoreB" type="number" min="0" max="100000" value="0" required></label><button>Save result</button></form></section>
+<html lang="en">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Bracket room</title><link rel="stylesheet" href="/style.css">
+  <script type="module" src="/app.js"></script>
+</head>
+<body><main>
+  <header><h1>Bracket room</h1><p>Run a knockout cup or a round-robin league from registration to the final standings.</p></header>
+  <section aria-label="Connection">
+    <label>Organizer API token <input id="token" type="password" autocomplete="off"></label>
+    <button id="connect">Connect / refresh</button><small>The token stays in page memory.</small>
+  </section>
+  <p id="status" role="status" aria-live="polite"></p>
+  <section>
+    <h2>Tournaments</h2>
+    <form id="create">
+      <label>Name <input name="name" maxlength="64" required></label>
+      <label>Format <select name="format" id="format"><option value="single_elimination">Single elimination</option><option value="round_robin">Round robin</option></select></label>
+      <label>Capacity <input id="capacity" name="capacity" type="number" min="2" max="128" value="32" required></label>
+      <button>Create tournament</button>
+    </form>
+    <p id="format-help" class="hint">Knockout matches with seeded byes. Up to 128 entrants.</p>
+    <ul id="tournaments"></ul>
+  </section>
+  <section>
+    <h2 id="selected">Select a tournament</h2><p id="summary" class="hint"></p>
+    <form id="register"><label>Entrant name <input name="name" maxlength="40" required></label><label>Seed (optional) <input name="seed" type="number" min="1" max="128"></label><button>Register entrant</button></form>
+    <ol id="entrants"></ol>
+    <form id="manage"><label>Entrant ID <input name="entrantId" type="number" min="1" required></label><label>New seed <input name="seed" type="number" min="1" max="128"></label><button name="action" value="seed">Change seed</button><button name="action" value="withdraw">Withdraw entrant</button></form>
+    <p class="controls"><button id="start">Start tournament</button><button id="cancel">Cancel tournament</button></p>
+    <small>Registration and seeds lock at start. Reported results are final.</small>
+  </section>
+  <section id="standings-section" hidden>
+    <div class="section-heading"><h2>Standings</h2><button id="export">Download CSV</button></div>
+    <p class="hint">Win: 3 points · Draw: 1 · Loss: 0. Ties use score difference, then score for. Identical records share a rank.</p>
+    <div id="standings" class="table-wrap"></div>
+  </section>
+  <section>
+    <h2 id="fixtures-title">Bracket</h2>
+    <div class="controls" id="fixture-filters" hidden>
+      <label>Round <select id="fixture-round"><option value="all">All rounds</option></select></label>
+      <label>Status <select id="fixture-status"><option value="all">All matches</option><option value="ready">Ready</option><option value="completed">Completed</option><option value="waiting">Waiting</option><option value="bye">Byes</option></select></label>
+    </div>
+    <div id="bracket"><p>Select a tournament to see its matches.</p></div>
+  </section>
+  <section>
+    <h2>Report result</h2><p id="result-help" class="hint">Select a running tournament first.</p>
+    <form id="result">
+      <label>Ready match <select name="matchId" id="match-choice" required><option value="">No ready matches</option></select></label>
+      <label><span id="side-a">Side A score</span><input name="scoreA" type="number" min="0" max="100000" value="0" required></label>
+      <label><span id="side-b">Side B score</span><input name="scoreB" type="number" min="0" max="100000" value="0" required></label>
+      <button>Save result</button>
+    </form>
+  </section>
 </main></body></html>

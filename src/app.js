@@ -1,8 +1,10 @@
 import { createServer,positiveId } from './http.js';
 export function createApp(store,token){return createServer({token,publicDir:new URL('../public/',import.meta.url),route(method,path,body){
  if(path==='/api/tournaments'){
-   if(method==='GET')return store.list();if(method==='POST')return store.create(body.name,body.capacity);
+   if(method==='GET')return store.list();if(method==='POST')return store.create(body.name,body.capacity,body.format);
  }
+ const standingsPath=path.match(/^\/api\/tournaments\/(\d+)\/standings$/);
+ if(method==='GET'&&standingsPath)return store.detail(positiveId(standingsPath[1])).standings;
  let m=path.match(/^\/api\/tournaments\/(\d+)$/);
  if(method==='GET'&&m)return store.detail(positiveId(m[1]));
  m=path.match(/^\/api\/tournaments\/(\d+)\/(register|start|cancel|seed|withdraw|result)$/);

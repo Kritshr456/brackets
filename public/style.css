@@ -1,1 +1,18 @@
 *{box-sizing:border-box}body{margin:0;background:#f5f6f8;color:#202a39;font:16px/1.5 system-ui,sans-serif}main{max-width:1080px;margin:36px auto;padding:0 22px}h1{margin-bottom:4px}h2{font-size:1.2rem}section{background:white;padding:20px;margin:20px 0;border:1px solid #dce1e8;border-radius:10px}form,.controls{display:flex;gap:10px;flex-wrap:wrap;align-items:end}label{display:grid;gap:4px}input,select,button{font:inherit;padding:9px;border:1px solid #a9b4c4;border-radius:5px}button{cursor:pointer;background:#174d81;color:white}button:hover{background:#123d66}pre{white-space:pre-wrap;overflow-wrap:anywhere;background:#f3f5f8;padding:16px;max-height:560px;overflow:auto}#status{min-height:28px;font-weight:600}small{color:#4c596a}input[type=password]{min-width:290px}#bracket{display:flex;gap:18px;overflow:auto;padding-bottom:15px}.round{min-width:210px;flex:1}.match{border:1px solid #ccd5df;border-left:4px solid #8294a8;border-radius:5px;margin:12px 0;padding:12px}.match.ready{border-left-color:#1d6a9d}.match.completed{border-left-color:#328257}.match p{margin:4px 0}.winner{font-weight:700}#tournaments button{margin:6px 0}
+[hidden]{display:none!important}
+.hint{color:#4c596a;font-size:.92rem}
+.section-heading{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.table-wrap{overflow-x:auto}
+table{width:100%;border-collapse:collapse;text-align:left;font-size:.92rem}
+caption{text-align:left;padding:8px 0;color:#4c596a}
+th,td{padding:11px 12px;border-bottom:1px solid #dce1e8;white-space:nowrap}
+th{background:#edf1f6}
+.leader{background:#edf7f0}
+button:disabled,input:disabled,select:disabled{opacity:.55;cursor:not-allowed}
+#fixture-filters{margin-bottom:12px}
+#bracket{padding-top:10px}
+#match-choice{max-width:100%}
+#result label:first-child{max-width:100%;flex:1 1 250px}
+#tournaments{padding-left:0;list-style:none}
+#tournaments button{text-align:left}
+@media(max-width:600px){main{margin:18px auto;padding:0 12px}section{padding:16px}input[type=password]{min-width:0;width:100%}.section-heading{align-items:start;flex-direction:column}form>label{width:100%}#bracket{gap:12px}}

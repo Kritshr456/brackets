@@ -1,8 +1,8 @@
 {
   "name": "brackets",
-  "version": "1.0.1",
+  "version": "1.1.0",
   "private": true,
-  "description": "Single-elimination tournament management",
+  "description": "Single-elimination and round-robin tournament management",
   "type": "module",
   "engines": {
     "node": ">=22.13.0"
@@ -10,8 +10,11 @@
   "scripts": {
     "start": "node src/index.js",
     "test": "node --test",
-    "check": "node scripts/check.js"
+    "check": "node scripts/check.js",
+    "test:browser": "playwright test"
   },
   "license": "MIT",
-  "dependencies": {}
+  "devDependencies": {
+    "@playwright/test": "^1.65.1"
+  }
 }
