@@ -14,7 +14,7 @@ function tournament(store, count = 4, format = 'single_elimination') {
 }
 function finish(store, t) {
   while (t.status === 'running') {
-    for (const m of t.matches.filter(m => m.status === 'ready')) t = store.result(t.id, m.id, 2, 0);
+    for (const m of t.matches.filter(m => m.status === 'ready')) t = store.result(t.id, m.id, 2, 0, m.revision);
   }
   return t;
 }
@@ -44,7 +44,7 @@ test('changing a semifinal winner reopens a completed cup and retains the unaffe
   assert.equal(history.rows[0].source_match, first.id);
   assert.equal(history.rows[1].before_score_a, 2);
   assert.equal(history.rows[1].score_b, 3);
-  const finished = s.result(cup.id, ready.id, 4, 1);
+  const finished = s.result(cup.id, ready.id, 4, 1, ready.revision);
   assert.equal(finished.status, 'completed');
   assert.equal(finished.champion, first.b);
 });

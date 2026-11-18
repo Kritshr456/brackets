@@ -224,3 +224,16 @@ upgrade onward.
 
 Releases before 1.2.0 cannot open the upgraded schema. Restore the pre-upgrade
 backup to roll back.
+
+### Result forms after score corrections
+
+POST `/api/tournaments/:id/result` accepts `expectedRevision`, taken from the
+match displayed to the organizer. Stale revisions are rejected with 409 before
+writing scores or audit events. This prevents an old form from scoring replacement
+participants after a feeder correction. The dashboard sends this value automatically.
+For compatibility, untouched revision-zero matches may omit it; matches cleared
+by a correction require a current revision. Refresh before retrying a stale form.
+
+Oversized declared request bodies are rejected from their headers before upload
+bytes are accepted. Streaming bodies remain limited to 16 KB. A 413 response
+explicitly closes the connection rather than advertising reuse for an unfinished upload.

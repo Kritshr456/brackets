@@ -205,3 +205,23 @@ test('result history pages retain older correction reasons', async ({ page }) =>
   await page.getByRole('button', { name: 'Previous history page', exact: true }).click();
   await expect(page.locator('#history-summary')).toHaveText('Page 1 of 2 · 23 events');
 });
+
+test('an old result form cannot score new participants after another organizer corrects a feeder', async ({ page }) => {
+  await connect(page); await create(page, 'Stale result cup', 'single_elimination', 4);
+  for (const name of ['Stale Alpha','Stale Beta','Stale Gamma','Stale Delta']) await register(page,name);
+  await page.getByRole('button',{name:'Start tournament',exact:true}).click();
+  await expect(page.locator('#status')).toHaveText('Saved / refreshed.');
+  await result(page,2,0);await result(page,2,0);
+  const id=(await page.locator('#selected').textContent()).match(/^#(\d+)/)[1];
+  const headers={Authorization:`Bearer ${browserToken}`};
+  const before=await(await page.request.get(`/api/tournaments/${id}`,{headers})).json(),semi=before.matches[0];
+  const corrected=await page.request.post(`/api/tournaments/${id}/correct-result`,{headers,data:{
+    matchId:semi.id,scoreA:0,scoreB:3,expectedScoreA:semi.score_a,expectedScoreB:semi.score_b,expectedRevision:semi.revision,reason:'Second organizer corrected the winner',
+  }});expect(corrected.status()).toBe(200);
+  await result(page,2,0,'This match changed. Refresh and send its current expectedRevision before reporting a result.');
+  const unchanged=await(await page.request.get(`/api/tournaments/${id}`,{headers})).json();
+  expect(unchanged.status).toBe('running');expect(unchanged.matches.at(-1).score_a).toBe(null);
+  await page.getByRole('button',{name:'Connect / refresh'}).click();
+  await expect(page.locator('#status')).toHaveText('Saved / refreshed.');
+  await result(page,2,0);await expect(page.locator('#selected')).toContainText('Champion: Stale Delta');
+});

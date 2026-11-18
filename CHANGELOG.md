@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.2.1
+
+- Reject oversized declared uploads early and close rejected streaming requests cleanly.
+
+
+- Guard normal result submissions against stale forms after feeder corrections, including participant changes and revision reuse.
+
 ## 1.2.0
 
 - Correct saved scores in running and completed tournaments with a recorded reason.

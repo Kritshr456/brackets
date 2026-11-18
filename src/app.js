@@ -17,6 +17,6 @@ export function createApp(store,token){return createServer({token,publicDir:new 
    case 'seed':return store.reseed(id,body.entrantId,body.seed);
    case 'withdraw':return store.withdraw(id,body.entrantId);
    case 'correct-result':return store.correctResult(id,body);
-   case 'result':return store.result(id,body.matchId,body.scoreA,body.scoreB);
+   case 'result':return store.result(id,body.matchId,body.scoreA,body.scoreB,body.expectedRevision);
  }}
  }});}

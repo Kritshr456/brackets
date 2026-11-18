@@ -183,13 +183,18 @@ export function openStore(path = ':memory:') {
         return this.detail(t.id);
       });
     },
-    result(id, matchId, scoreA, scoreB) {
+    result(id, matchId, scoreA, scoreB, expectedRevision) {
       return tx(() => {
         const t = tournament(id);
         if (t.status !== 'running') throw new HttpError(409, 'Tournament is not running.');
         const m = db.prepare('SELECT * FROM matches WHERE tournament=? AND id=?').get(t.id, positiveId(matchId));
         if (!m) throw new HttpError(404, 'Match not found.');
         if (m.status !== 'ready') throw new HttpError(409, 'Only ready matches can receive a result.');
+        if (expectedRevision !== undefined && (!Number.isSafeInteger(expectedRevision) || expectedRevision < 0))
+          throw new HttpError(400, 'expectedRevision must be a nonnegative safe integer.');
+        if ((expectedRevision === undefined && m.revision !== 0) ||
+          (expectedRevision !== undefined && expectedRevision !== m.revision))
+          throw new HttpError(409, 'This match changed. Refresh and send its current expectedRevision before reporting a result.');
         const winner = resultWinner(t, m, scoreA, scoreB);
         recordEvent(t.id, m, 'recorded', scoreA, scoreB, winner);
         db.prepare("UPDATE matches SET winner=?,score_a=?,score_b=?,status='completed',revision=revision+1 WHERE id=?")

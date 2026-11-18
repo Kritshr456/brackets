@@ -186,7 +186,8 @@ $('start').onclick = () => run(() => action('start'));
 $('cancel').onclick = () => { if (confirm('Cancel this tournament? This cannot be undone.')) run(() => action('cancel')); };
 $('result').onsubmit = e => {
   e.preventDefault(); const f = new FormData(e.target);
-  run(() => action('result', { matchId: Number(f.get('matchId')), scoreA: Number(f.get('scoreA')), scoreB: Number(f.get('scoreB')) }));
+  const match = state.tournament?.matches.find(m => m.id === Number(f.get('matchId')));
+  run(() => action('result', { matchId: Number(f.get('matchId')), scoreA: Number(f.get('scoreA')), scoreB: Number(f.get('scoreB')), expectedRevision: match?.revision }));
 };
 $('correction-match').onchange = updateCorrectionFields;
 $('correction').onsubmit = e => {
