@@ -158,20 +158,20 @@ test('legacy databases migrate without altering entrants, scores or running brac
     let s = openStore(path);
     const old = s.detail(1);
     assert.equal(old.format, 'single_elimination'); assert.equal(old.status, 'running');
-    assert.deepEqual(old.entrants, beforeEntrants); assert.deepEqual(old.matches, beforeMatches);
+    assert.deepEqual(old.entrants, beforeEntrants); assert.deepEqual(old.matches.map(({ revision, ...match }) => match), beforeMatches.map(match => ({ ...match })));
     assert.equal(s.detail(2).format, 'single_elimination');
     assert.equal(s.result(1, 60, 2, 0).champion, 10);
     const league = cup(s, 3); s.result(league.id, league.matches[0].id, 1, 1);
     const snapshot = s.detail(league.id); s.close();
     s = openStore(path); assert.deepEqual(s.detail(league.id), snapshot); assert.equal(s.detail(1).champion, 10); s.close();
-    const inspect = new DatabaseSync(path); assert.equal(inspect.prepare('PRAGMA user_version').get().user_version, 1); inspect.close();
+    const inspect = new DatabaseSync(path); assert.equal(inspect.prepare('PRAGMA user_version').get().user_version, 2); inspect.close();
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
 
 test('future schema versions are refused without deleting data', () => {
   const dir = mkdtempSync(join(tmpdir(), 'brackets-future-')), path = join(dir, 'app.sqlite');
   try {
-    let db = new DatabaseSync(path); db.exec("CREATE TABLE sentinel(value TEXT); INSERT INTO sentinel VALUES('keep'); PRAGMA user_version=2"); db.close();
+    let db = new DatabaseSync(path); db.exec("CREATE TABLE sentinel(value TEXT); INSERT INTO sentinel VALUES('keep'); PRAGMA user_version=3"); db.close();
     assert.throws(() => openStore(path), /newer/);
     db = new DatabaseSync(path); assert.equal(db.prepare('SELECT value FROM sentinel').get().value, 'keep'); db.close();
   } finally { rmSync(dir, { recursive: true, force: true }); }

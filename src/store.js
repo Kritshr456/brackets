@@ -70,14 +70,55 @@ export function openStore(path = ':memory:') {
     const champion = leaders.length === 1 ? leaders[0].entrant_id : null;
     db.prepare("UPDATE tournaments SET status='completed',champion=? WHERE id=?").run(champion, id);
   }
+  function resultWinner(t, m, scoreA, scoreB) {
+    if (![scoreA, scoreB].every(n => Number.isInteger(n) && n >= 0 && n <= 100000))
+      throw new HttpError(400, 'Scores must be integers from 0 to 100000.');
+    if (scoreA === scoreB && t.format !== 'round_robin')
+      throw new HttpError(400, 'Single-elimination matches cannot end in a draw.');
+    return scoreA === scoreB ? null : scoreA > scoreB ? m.a : m.b;
+  }
+  function recordEvent(tournamentId, m, event, scoreA, scoreB, winner, reason = null, source = m.id) {
+    db.prepare(`INSERT INTO result_events(tournament,match,event,a,b,before_score_a,before_score_b,
+      before_winner,score_a,score_b,winner,reason,source_match) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)`)
+      .run(tournamentId, m.id, event, m.a, m.b, m.score_a, m.score_b, m.winner,
+        scoreA, scoreB, winner, reason, source);
+  }
+  function invalidateDependents(tournamentId, m, reason) {
+    const invalidated = [];
+    let round = m.round + 1, position = Math.floor(m.position / 2);
+    const next = db.prepare('SELECT * FROM matches WHERE tournament=? AND round=? AND position=?');
+    let dependent = next.get(tournamentId, round, position);
+    while (dependent) {
+      if (dependent.status === 'completed') {
+        recordEvent(tournamentId, dependent, 'invalidated', null, null, null, reason, m.id);
+        invalidated.push(dependent.id);
+      }
+      db.prepare(`UPDATE matches SET a=NULL,b=NULL,winner=NULL,status='waiting',
+        score_a=NULL,score_b=NULL,revision=revision+1 WHERE id=?`).run(dependent.id);
+      round += 1;
+      position = Math.floor(position / 2);
+      dependent = next.get(tournamentId, round, position);
+    }
+    return invalidated;
+  }
+  function resultHistory(id, page = 1) {
+    const t = tournament(id);
+    if (!Number.isInteger(page) || page < 1 || page > 100000)
+      throw new HttpError(400, 'Invalid result history page.');
+    const total = db.prepare('SELECT COUNT(*) AS total FROM result_events WHERE tournament=?').get(t.id).total;
+    const rows = db.prepare('SELECT * FROM result_events WHERE tournament=? ORDER BY id DESC LIMIT 20 OFFSET ?')
+      .all(t.id, (page - 1) * 20);
+    return { page, total, rows };
+  }
   return {
     close: () => db.close(), tournament,
     detail(id) {
       const t = tournament(id), players = entrants(t.id), fixtures = matches(t.id);
       const standings = t.format === 'round_robin' ? roundRobinStandings(players, fixtures) : [];
       const leaders = standings.filter(row => row.rank === 1).map(row => row.entrant_id);
-      return { ...t, entrants: players, matches: fixtures, standings, leaders };
+      return { ...t, entrants: players, matches: fixtures, standings, leaders, resultHistory: resultHistory(t.id) };
     },
+    resultHistory,
     list: () => db.prepare('SELECT * FROM tournaments ORDER BY id DESC LIMIT 100').all(),
     create(name, capacity = 32, format = 'single_elimination') {
       name = text(name, 64);
@@ -149,15 +190,39 @@ export function openStore(path = ':memory:') {
         const m = db.prepare('SELECT * FROM matches WHERE tournament=? AND id=?').get(t.id, positiveId(matchId));
         if (!m) throw new HttpError(404, 'Match not found.');
         if (m.status !== 'ready') throw new HttpError(409, 'Only ready matches can receive a result.');
-        if (![scoreA, scoreB].every(n => Number.isInteger(n) && n >= 0 && n <= 100000))
-          throw new HttpError(400, 'Scores must be integers from 0 to 100000.');
-        if (scoreA === scoreB && t.format !== 'round_robin')
-          throw new HttpError(400, 'Single-elimination matches cannot end in a draw.');
-        const winner = scoreA === scoreB ? null : scoreA > scoreB ? m.a : m.b;
-        db.prepare("UPDATE matches SET winner=?,score_a=?,score_b=?,status='completed' WHERE id=?")
+        const winner = resultWinner(t, m, scoreA, scoreB);
+        recordEvent(t.id, m, 'recorded', scoreA, scoreB, winner);
+        db.prepare("UPDATE matches SET winner=?,score_a=?,score_b=?,status='completed',revision=revision+1 WHERE id=?")
           .run(winner, scoreA, scoreB, m.id);
         if (t.format === 'round_robin') settleRoundRobin(t.id); else settleKnockout(t.id);
         return this.detail(t.id);
+      });
+    },
+    correctResult(id, { matchId, scoreA, scoreB, expectedScoreA, expectedScoreB, expectedRevision, reason }) {
+      return tx(() => {
+        const t = tournament(id);
+        if (!['running', 'completed'].includes(t.status))
+          throw new HttpError(409, 'Only running or completed tournaments can have results corrected.');
+        const m = db.prepare('SELECT * FROM matches WHERE tournament=? AND id=?').get(t.id, positiveId(matchId));
+        if (!m) throw new HttpError(404, 'Match not found.');
+        if (m.status !== 'completed') throw new HttpError(409, 'Only completed matches can be corrected.');
+        const winner = resultWinner(t, m, scoreA, scoreB);
+        if (![expectedScoreA, expectedScoreB].every(n => Number.isInteger(n) && n >= 0 && n <= 100000))
+          throw new HttpError(400, 'Supply the previously displayed scores as expectedScoreA and expectedScoreB.');
+        if (!Number.isSafeInteger(expectedRevision) || expectedRevision < 0)
+          throw new HttpError(400, 'Supply the previously displayed expectedRevision.');
+        if (m.revision !== expectedRevision || m.score_a !== expectedScoreA || m.score_b !== expectedScoreB)
+          throw new HttpError(409, 'The saved result changed. Refresh before correcting it.');
+        reason = text(reason, 400);
+        if (m.score_a === scoreA && m.score_b === scoreB)
+          throw new HttpError(409, 'The saved scores already match.');
+        recordEvent(t.id, m, 'corrected', scoreA, scoreB, winner, reason);
+        db.prepare('UPDATE matches SET score_a=?,score_b=?,winner=?,revision=revision+1 WHERE id=?').run(scoreA, scoreB, winner, m.id);
+        const invalidatedMatches = t.format === 'single_elimination' && winner !== m.winner ?
+          invalidateDependents(t.id, m, reason) : [];
+        db.prepare("UPDATE tournaments SET status='running',champion=NULL WHERE id=?").run(t.id);
+        if (t.format === 'round_robin') settleRoundRobin(t.id); else settleKnockout(t.id);
+        return { ...this.detail(t.id), invalidatedMatches };
       });
     },
     cancel(id) {

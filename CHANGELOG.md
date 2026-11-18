@@ -1,5 +1,23 @@
 # Changelog
 
+## 1.2.0
+
+- Correct saved scores in running and completed tournaments with a recorded reason.
+- Recompute round-robin standings, shared leaders and champions after corrections.
+- Reopen knockout cups and clear dependent scored matches when a corrected winner changes.
+- Retain original scores, corrections and cleared results in paginated history.
+- Reject stale correction forms using displayed scores and match revisions.
+- Add dashboard correction/history controls, mobile layout fixes and safe text rendering.
+- Migrate existing databases to schema version 2 without inventing past result events.
+- Isolate browser tests per server/database while retaining production rate limits.
+
+### Upgrade
+
+Stop and back up the database and WAL files, install dependencies, then restart.
+Existing tournament data is preserved. Restore the backup to roll back to a release
+before 1.2.0.
+
+
 ## 1.1.0
 
 - Add round-robin leagues for 2–32 entrants with rotating schedules and rest rounds for odd fields.

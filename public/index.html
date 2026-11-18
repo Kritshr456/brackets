@@ -29,7 +29,7 @@
     <ol id="entrants"></ol>
     <form id="manage"><label>Entrant ID <input name="entrantId" type="number" min="1" required></label><label>New seed <input name="seed" type="number" min="1" max="128"></label><button name="action" value="seed">Change seed</button><button name="action" value="withdraw">Withdraw entrant</button></form>
     <p class="controls"><button id="start">Start tournament</button><button id="cancel">Cancel tournament</button></p>
-    <small>Registration and seeds lock at start. Reported results are final.</small>
+    <small>Registration and seeds lock at start. Saved results can be corrected below with a recorded reason.</small>
   </section>
   <section id="standings-section" hidden>
     <div class="section-heading"><h2>Standings</h2><button id="export">Download CSV</button></div>
@@ -52,5 +52,23 @@
       <label><span id="side-b">Side B score</span><input name="scoreB" type="number" min="0" max="100000" value="0" required></label>
       <button>Save result</button>
     </form>
+  </section>
+  <section>
+    <h2>Correct a saved result</h2>
+    <p id="correction-help" class="hint">Choose a completed match. A reason is kept with the original and replacement scores.</p>
+    <form id="correction">
+      <label>Completed match <select name="matchId" id="correction-match" required><option value="">No completed matches</option></select></label>
+      <label><span id="correction-side-a">Side A score</span><input name="scoreA" type="number" min="0" max="100000" required></label>
+      <label><span id="correction-side-b">Side B score</span><input name="scoreB" type="number" min="0" max="100000" required></label>
+      <label>Correction reason <input name="reason" maxlength="400" required></label>
+      <button>Correct saved score</button>
+    </form>
+  </section>
+  <section>
+    <h2>Result history</h2>
+    <p class="hint">Original scores, corrections and cleared dependent results are retained. History starts with version 1.2.0.</p>
+    <ol id="result-history"></ol>
+    <p id="history-summary"></p>
+    <div class="controls"><button id="history-prev">Previous history page</button><button id="history-next">Next history page</button></div>
   </section>
 </main></body></html>

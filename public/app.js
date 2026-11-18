@@ -1,7 +1,7 @@
 import { standingsCsv } from './format.js';
 
 const $ = id => document.getElementById(id);
-const state = { selected: null, tournament: null, busy: false };
+const state = { selected: null, tournament: null, history: null, busy: false };
 const formatName = format => format === 'round_robin' ? 'Round robin' : 'Single elimination';
 
 async function api(path, body) {
@@ -29,6 +29,10 @@ function updateControls() {
   $('cancel').disabled = state.busy || !['registration', 'running'].includes(t?.status);
   const canReport = t?.status === 'running' && t.matches.some(m => m.status === 'ready');
   for (const e of $('result').elements) e.disabled = state.busy || !canReport;
+  const canCorrect = ['running', 'completed'].includes(t?.status) && t.matches.some(m => m.status === 'completed');
+  for (const e of $('correction').elements) e.disabled = state.busy || !canCorrect;
+  $('history-prev').disabled = state.busy || !state.history || state.history.page <= 1;
+  $('history-next').disabled = state.busy || !state.history || state.history.page * 20 >= state.history.total;
   $('export').disabled = state.busy || !t?.standings.length;
 }
 function renderStandings(t) {
@@ -77,6 +81,32 @@ function updateScoreLabels() {
   $('side-a').textContent = match ? `${name(match.a)} score` : 'Side A score';
   $('side-b').textContent = match ? `${name(match.b)} score` : 'Side B score';
 }
+function updateCorrectionFields() {
+  const t = state.tournament, match = t?.matches.find(m => String(m.id) === $('correction-match').value);
+  const name = id => t.entrants.find(e => e.id === id)?.name || 'Side';
+  $('correction-side-a').textContent = match ? `${name(match.a)} score` : 'Side A score';
+  $('correction-side-b').textContent = match ? `${name(match.b)} score` : 'Side B score';
+  $('correction').elements.scoreA.value = match?.score_a ?? '';
+  $('correction').elements.scoreB.value = match?.score_b ?? '';
+}
+function renderHistory(history) {
+  state.history = history;
+  const names = new Map(state.tournament.entrants.map(e => [e.id, e.name]));
+  const labels = { recorded: 'Recorded', corrected: 'Corrected', invalidated: 'Cleared after correction' };
+  $('result-history').replaceChildren(...history.rows.map(event => {
+    const before = event.before_score_a === null ? 'No saved score' : `${event.before_score_a}–${event.before_score_b}`;
+    const after = event.score_a === null ? 'Awaiting a new result' : `${event.score_a}–${event.score_b}`;
+    const item = node('li');
+    item.append(node('p', `#${event.id} · ${labels[event.event]} · Match #${event.match} · ${event.created} UTC`));
+    item.append(node('p', `${names.get(event.a)} vs ${names.get(event.b)} · ${before} → ${after}`));
+    if (event.reason) item.append(node('p', `Reason — ${event.reason}`));
+    if (event.event === 'invalidated') item.append(node('small', `Caused by correction to match #${event.source_match}.`));
+    return item;
+  }));
+  if (!history.rows.length) $('result-history').append(node('li', 'No result events on this page.'));
+  $('history-summary').textContent = `Page ${history.page} of ${Math.max(1, Math.ceil(history.total / 20))} · ${history.total} events`;
+  updateControls();
+}
 function render(t) {
   state.tournament = t;
   const name = id => t.entrants.find(e => e.id === id)?.name || `#${id}`;
@@ -95,7 +125,16 @@ function render(t) {
   const previousMatch = $('match-choice').value, ready = t.status === 'running' ? t.matches.filter(m => m.status === 'ready') : [];
   $('match-choice').replaceChildren(...(ready.length ? ready.map(m => option(m.id, `#${m.id} · R${m.round} · ${name(m.a)} vs ${name(m.b)}`)) : [option('', 'No ready matches')]));
   if (ready.some(m => String(m.id) === previousMatch)) $('match-choice').value = previousMatch;
-  updateScoreLabels(); renderStandings(t); renderFixtures(); updateControls();
+  const previousCorrection = $('correction-match').value;
+  const completed = ['running', 'completed'].includes(t.status) ? t.matches.filter(m => m.status === 'completed') : [];
+  $('correction-match').replaceChildren(...(completed.length ? completed.map(m =>
+    option(m.id, `#${m.id} · R${m.round} · ${name(m.a)} vs ${name(m.b)} · ${m.score_a}–${m.score_b}`)) :
+    [option('', 'No completed matches')]));
+  if (completed.some(m => String(m.id) === previousCorrection)) $('correction-match').value = previousCorrection;
+  $('correction-help').textContent = t.format === 'single_elimination' ?
+    'Changing the winner clears scores in dependent later matches and reopens a finished cup. A score-only correction keeps later results.' :
+    'Corrections recalculate standings and the champion, including completed leagues. Draws are allowed.';
+  updateCorrectionFields(); updateScoreLabels(); renderStandings(t); renderFixtures(); renderHistory(t.resultHistory); updateControls();
 }
 async function refresh() {
   const list = await api('');
@@ -149,6 +188,26 @@ $('result').onsubmit = e => {
   e.preventDefault(); const f = new FormData(e.target);
   run(() => action('result', { matchId: Number(f.get('matchId')), scoreA: Number(f.get('scoreA')), scoreB: Number(f.get('scoreB')) }));
 };
+$('correction-match').onchange = updateCorrectionFields;
+$('correction').onsubmit = e => {
+  e.preventDefault();
+  const f = new FormData(e.target);
+  const match = state.tournament?.matches.find(m => String(m.id) === f.get('matchId'));
+  if (!match || !confirm('Save this correction? Changing a knockout winner clears dependent later results.')) return;
+  run(async () => {
+    const result = await api(`/${state.selected}/correct-result`, {
+      matchId: match.id, scoreA: Number(f.get('scoreA')), scoreB: Number(f.get('scoreB')),
+      expectedScoreA: match.score_a, expectedScoreB: match.score_b, expectedRevision: match.revision, reason: f.get('reason'),
+    });
+    await refresh(); e.target.elements.reason.value = '';
+    return `Result corrected. ${result.invalidatedMatches.length} dependent result(s) cleared.`;
+  });
+};
+async function historyPage(page) {
+  renderHistory(await api(`/${state.selected}/result-history?page=${page}`));
+}
+$('history-prev').onclick = () => run(() => historyPage(state.history.page - 1));
+$('history-next').onclick = () => run(() => historyPage(state.history.page + 1));
 $('fixture-round').onchange = renderFixtures; $('fixture-status').onchange = renderFixtures;
 $('match-choice').onchange = updateScoreLabels;
 $('export').onclick = () => {

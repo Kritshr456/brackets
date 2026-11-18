@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './browser.js';
 import { readFile } from 'node:fs/promises';
 import { browserToken } from './fixture.js';
 
@@ -117,4 +117,91 @@ test('round-robin table and fixtures remain usable on a phone viewport', async (
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
   await result(page, 2, 1);
   await expect(page.locator('#standings tbody tr').first().locator('td').nth(9)).toHaveText('3');
+});
+
+test('correcting a knockout winner reopens the cup and retains an audit trail after reload', async ({ page }) => {
+  await connect(page);
+  await create(page, 'Correction cup', 'single_elimination', 4);
+  for (const name of ['Correction Alpha', 'Correction Beta', 'Correction Gamma', 'Correction Delta']) await register(page, name);
+  await page.getByRole('button', { name: 'Start tournament', exact: true }).click();
+  await expect(page.locator('#status')).toHaveText('Saved / refreshed.');
+  await result(page, 2, 0); await result(page, 2, 0); await result(page, 2, 0);
+  await expect(page.locator('#selected')).toContainText('Champion: Correction Alpha');
+  await page.setViewportSize({ width: 390, height: 844 });
+  const target = await page.locator('#correction-match option').first().getAttribute('value');
+  await page.locator('#correction-match').selectOption(target);
+  await expect(page.locator('#correction input[name=scoreA]')).toHaveValue('2');
+  await page.locator('#correction input[name=scoreA]').fill('0');
+  await page.locator('#correction input[name=scoreB]').fill('3');
+  const reason = '<img src=x onerror=alert(1)> Score entered backwards';
+  await page.getByLabel('Correction reason', { exact: true }).fill(reason);
+  page.once('dialog', dialog => dialog.accept());
+  await page.getByRole('button', { name: 'Correct saved score', exact: true }).click();
+  await expect(page.locator('#status')).toHaveText('Result corrected. 1 dependent result(s) cleared.');
+  await expect(page.locator('#selected')).toContainText('running');
+  await expect(page.locator('#bracket .ready')).toHaveCount(1);
+  await expect(page.locator('#result-history')).toContainText('Cleared after correction');
+  await expect(page.locator('#result-history')).toContainText(reason);
+  await expect(page.locator('#result-history img')).toHaveCount(0);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  await page.reload(); await connect(page);
+  await page.locator('#tournaments button').filter({ hasText: 'Correction cup' }).click();
+  await expect(page.locator('#result-history')).toContainText(reason);
+  await result(page, 4, 0);
+  await expect(page.locator('#selected')).toContainText('Champion: Correction Delta');
+  if (process.env.BROWSER_CORRECTION_SCREENSHOT_PATH)
+    await page.screenshot({ path: process.env.BROWSER_CORRECTION_SCREENSHOT_PATH, fullPage: true });
+});
+
+test('correcting a completed league updates its champion and exported standings', async ({ page }) => {
+  await connect(page); await create(page, 'Corrected league', 'round_robin', 2);
+  await register(page, 'League Alpha'); await register(page, 'League Beta');
+  await page.getByRole('button', { name: 'Start tournament', exact: true }).click();
+  await expect(page.locator('#status')).toHaveText('Saved / refreshed.');
+  await result(page, 0, 0);
+  await expect(page.locator('#selected')).toContainText('Shared first:');
+  await page.locator('#correction input[name=scoreA]').fill('2');
+  await page.locator('#correction input[name=scoreB]').fill('0');
+  await page.getByLabel('Correction reason', { exact: true }).fill('Confirmed score with the organizer');
+  const expectedChampion = await page.locator('#correction-side-a').textContent();
+  page.once('dialog', dialog => dialog.accept());
+  await page.getByRole('button', { name: 'Correct saved score', exact: true }).click();
+  await expect(page.locator('#status')).toHaveText('Result corrected. 0 dependent result(s) cleared.');
+  await expect(page.locator('#selected')).toContainText(`Champion: ${expectedChampion.replace(/ score$/, '')}`);
+  await expect(page.locator('#standings tbody tr').first().locator('td').nth(9)).toHaveText('3');
+  const download = page.waitForEvent('download');
+  await page.getByRole('button', { name: 'Download CSV', exact: true }).click();
+  const file = await download, csv = await readFile(await file.path(), 'utf8');
+  expect(csv).toContain('"2","0","2","3"');
+  await expect(page.locator('#result-history li')).toHaveCount(2);
+});
+
+test('result history pages retain older correction reasons', async ({ page }) => {
+  await connect(page); await create(page, 'History cup', 'single_elimination', 2);
+  await register(page, 'History Alpha'); await register(page, 'History Beta');
+  await page.getByRole('button', { name: 'Start tournament', exact: true }).click();
+  await expect(page.locator('#status')).toHaveText('Saved / refreshed.');
+  await result(page, 1, 0);
+  const id = (await page.locator('#selected').textContent()).match(/^#(\d+)/)[1];
+  const headers = { Authorization: `Bearer ${browserToken}` };
+  let current = await (await page.request.get(`/api/tournaments/${id}`, { headers })).json();
+  for (let i = 0; i < 22; i++) {
+    const match = current.matches[0];
+    const response = await page.request.post(`/api/tournaments/${id}/correct-result`, { headers, data: {
+      matchId: match.id, scoreA: i + 2, scoreB: 0, reason: `Verified score ${i}`,
+      expectedScoreA: match.score_a, expectedScoreB: match.score_b, expectedRevision: match.revision,
+    } });
+    expect(response.status()).toBe(200); current = await response.json();
+  }
+  await page.getByRole('button', { name: 'Connect / refresh' }).click();
+  await expect(page.locator('#status')).toHaveText('Saved / refreshed.');
+  await expect(page.locator('#history-summary')).toHaveText('Page 1 of 2 · 23 events');
+  await expect(page.locator('#result-history li')).toHaveCount(20);
+  await page.getByRole('button', { name: 'Next history page', exact: true }).click();
+  await expect(page.locator('#history-summary')).toHaveText('Page 2 of 2 · 23 events');
+  await expect(page.locator('#result-history li')).toHaveCount(3);
+  await expect(page.locator('#result-history')).toContainText('Verified score 0');
+  await expect(page.getByRole('button', { name: 'Next history page', exact: true })).toBeDisabled();
+  await page.getByRole('button', { name: 'Previous history page', exact: true }).click();
+  await expect(page.locator('#history-summary')).toHaveText('Page 1 of 2 · 23 events');
 });
