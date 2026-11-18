@@ -21,7 +21,8 @@ Register at least two entrants, check their seeds, and start the tournament.
 Select a ready match to report a result; the page labels both sides with their
 names. Round and status filters help narrow down a large fixture list.
 
-Registration and seeds lock at start. Results are final. Cancellation keeps the
+Registration and seeds lock at start. Saved results can be corrected with an
+audited reason. Cancellation keeps the
 saved fixtures and scores but prevents further results and awards no champion.
 The token grants full organizer access, so keep it private. Individual player
 accounts, public spectator links and self-service registration are not provided.
@@ -68,6 +69,32 @@ draws, losses, scores and points. Names are quoted and spreadsheet-formula prefi
 are escaped. Export does not expose the organizer token. The page is refreshed
 after its own changes; use **Connect / refresh** to load another organizer's changes.
 
+## Correct results and inspect history
+
+Select a completed match under **Correct a saved result**, enter its replacement
+scores and a reason, then confirm. Corrections work in running and completed
+tournaments. Cancelled tournaments and byes cannot be corrected.
+
+For knockout cups, a changed winner clears all scored matches along its dependent
+path to the final. These matches return to ready or waiting as their feeders
+permit, and a finished cup reopens for replay. The cleared scores stay in history.
+A correction that keeps the winner preserves later results. Correcting the final
+immediately updates the champion.
+
+For round-robin leagues, a correction recomputes points, score differences,
+standings, tied leaders and champion. A completed league stays completed.
+
+The result history records original submissions, before/after correction scores,
+reasons and cleared dependent results. Pages contain 20 events, newest first.
+History starts after the 1.2.0 upgrade. Existing scores are preserved without
+inventing historical events. Events snapshot the participants at the time they
+were recorded. The shared organizer token identifies no individual operator.
+
+Each match exposes a `revision`. Corrections must include that revision and the
+scores previously displayed. A stale request receives 409, including when newer
+corrections changed the scores and later restored them. Refresh before retrying.
+Duplicate submissions through the original result endpoint continue to return 409.
+
 ## JSON API
 
 All `/api` calls require `Authorization: Bearer <API_TOKEN>`. POST bodies must use
@@ -79,15 +106,44 @@ exponent-form strings are rejected. Scores must be integer numbers from 0 to 100
 | --- | --- | --- |
 | GET | /api/tournaments | Latest 100 tournaments, including their format |
 | POST | /api/tournaments | `{ "name": "League", "capacity": 16, "format": "round_robin" }` |
-| GET | /api/tournaments/:id | Tournament, entrants, matches, standings and leaders |
+| GET | /api/tournaments/:id | Tournament, entrants, matches with revisions, standings, leaders and first result-history page |
 | GET | /api/tournaments/:id/standings | Current round-robin standings; empty array for single elimination |
 | POST | /api/tournaments/:id/register | `{ "name": "Entrant", "seed": 1 }`; seed optional |
 | POST | /api/tournaments/:id/seed | `{ "entrantId": 1, "seed": 2 }` |
 | POST | /api/tournaments/:id/withdraw | `{ "entrantId": 1 }` |
 | POST | /api/tournaments/:id/start | `{}` |
 | POST | /api/tournaments/:id/result | `{ "matchId": 1, "scoreA": 2, "scoreB": 0 }` |
+| POST | /api/tournaments/:id/correct-result | Correction body described below |
+| GET | /api/tournaments/:id/result-history?page=2 | 20 result events per page, newest first |
 | POST | /api/tournaments/:id/cancel | `{}` |
 | GET | /health | Unauthenticated health check |
+
+Correction requests use the following body, populated from the current match.
+
+```json
+{
+  "matchId": 1,
+  "scoreA": 0,
+  "scoreB": 2,
+  "expectedScoreA": 2,
+  "expectedScoreB": 0,
+  "expectedRevision": 1,
+  "reason": "Scores were entered backwards"
+}
+```
+
+Reasons require 1–400 characters and cannot contain control characters.
+A successful correction returns the updated tournament and `invalidatedMatches`,
+the IDs of dependent matches whose saved scores were cleared. Match revisions
+increase on result submission, correction and dependent invalidation.
+
+`resultHistory` contains `page`, `total` and `rows`. The dedicated history endpoint
+accepts pages 1–100000 and returns the same structure. Each event contains `id`,
+`match`, `event` (recorded, corrected or invalidated), participant IDs `a`/`b`,
+`before_score_a`/`before_score_b`/`before_winner`, replacement `score_a`/`score_b`/
+`winner`, `reason`, `source_match` and the UTC `created` timestamp.
+Corrections, cleared scores, history writes and progression share one transaction.
+A failed history write rolls back the complete change.
 
 `format` accepts `single_elimination` (default) or `round_robin`. Capacity defaults
 to 32 and cannot exceed the selected format's limit. Omitting format preserves
@@ -110,8 +166,8 @@ memory; reloading requires entering it again. Names are rendered as text.
 There are no cookies or CORS grants. Requests have a 16 KB body limit, security
 headers and a per-address rate limit. Behind a proxy, its address is used because
 forwarded headers are not trusted. Stop before copying SQLite files, or use
-SQLite backup tooling. Automatic archival/deletion and result correction are not
-included. Double elimination, divisions and team rosters are also out of scope.
+SQLite backup tooling. Automatic archival/deletion, double elimination, divisions
+and team rosters are outside the current feature set.
 
 ## Checks
 
@@ -132,8 +188,9 @@ tests and scripts.
 Browser tests drive the real UI through the HTTP API into an isolated temporary
 SQLite database. They cover registration-to-completion for both formats,
 shared leaders, filtering, CSV download, reload persistence, authentication errors,
-HTML-like names and a phone viewport. The temporary server binds to loopback and
-uses a public test-only token; it never opens your configured production database.
+HTML-like names, score corrections, audit pagination and a phone viewport. Each
+test starts a separate loopback server with a temporary SQLite database and a
+public test-only token. Production rate limits remain enabled.
 CI runs Node tests on Node 22/24 and the Chromium browser flow on Node 24.
 
 To use an existing Chromium installation instead of downloading one:
@@ -142,8 +199,8 @@ To use an existing Chromium installation instead of downloading one:
 PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH=/usr/bin/chromium npm run test:browser
 ```
 
-Browser test artifacts are ignored by Git. `BROWSER_TEST_PORT` defaults to 4179;
-change it if occupied. These browser-test settings do not affect the app's PORT.
+Browser test artifacts are ignored by Git. Each isolated test server uses an
+available ephemeral port.
 
 ## Updating from 1.0.x
 
@@ -156,3 +213,14 @@ change it if occupied. These browser-test settings do not affect the app's PORT.
 No manual SQL or database reset is required. After creating round-robin leagues,
 do not point an older release at the same database: restore the pre-upgrade backup
 to roll back. See [CHANGELOG.md](CHANGELOG.md) for release changes.
+
+## Updating to 1.2.0
+
+Stop the service and back up the database and its WAL files before installing.
+Run `git pull --ff-only` and `npm ci`, then restart. Schema version 2 adds match
+revisions and result history transactionally. Existing tournaments, entrants,
+scores and champions are preserved. Historical events are recorded from this
+upgrade onward.
+
+Releases before 1.2.0 cannot open the upgraded schema. Restore the pre-upgrade
+backup to roll back.

@@ -16,3 +16,12 @@ button:disabled,input:disabled,select:disabled{opacity:.55;cursor:not-allowed}
 #tournaments{padding-left:0;list-style:none}
 #tournaments button{text-align:left}
 @media(max-width:600px){main{margin:18px auto;padding:0 12px}section{padding:16px}input[type=password]{min-width:0;width:100%}.section-heading{align-items:start;flex-direction:column}form>label{width:100%}#bracket{gap:12px}}
+
+#correction label:first-child{max-width:100%;flex:1 1 250px}
+#correction-match{max-width:100%}
+#result-history{padding-left:22px}
+#result-history li{border-bottom:1px solid #dce1e8;padding:8px 0;overflow-wrap:anywhere}
+#result-history p{margin:4px 0}
+
+#correction label:first-child,#result label:first-child{min-width:0}
+#correction-match,#match-choice{width:100%;min-width:0}
